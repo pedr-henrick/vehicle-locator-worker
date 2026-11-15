@@ -1,0 +1,9 @@
+version: v2beta1
+name: vehicle-location-worker
+
+deployments:
+  smoke:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/smoke.yaml
