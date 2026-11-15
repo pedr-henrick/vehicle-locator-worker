@@ -1,4 +1,20 @@
 <Solution>
+  <Folder Name="/deploy/" />
+  <Folder Name="/deploy/k8s/">
+    <File Path="deploy/k8s/postgres-init.sql" />
+    <File Path="deploy/k8s/postgres.yaml" />
+  </Folder>
+  <Folder Name="/deploy/kind/">
+    <File Path="deploy/kind/kind-config.yaml" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".gitignore" />
+    <File Path="devenv.lock" />
+    <File Path="devenv.nix" />
+    <File Path="devenv.yaml" />
+    <File Path="devspace.yaml" />
+    <File Path="justfile" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/VehicleLocator.Worker/VehicleLocator.Worker.csproj" />
   </Folder>

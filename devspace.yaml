@@ -2,8 +2,8 @@ version: v2beta1
 name: vehicle-location-worker
 
 deployments:
-  smoke:
+  postgres:
     namespace: fleet
     kubectl:
       manifests:
-        - deploy/k8s/smoke.yaml
+        - deploy/k8s/postgres.yaml
