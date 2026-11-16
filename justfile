@@ -24,10 +24,10 @@ deploy:
     devspace deploy --kube-context {{ctx}} --namespace {{ns}}
 
 wait:
-    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/postgres --timeout=900s
-    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/kafka --timeout=900s
-    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/valkey --timeout=900s
-    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/connect --timeout=900s
+    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/postgres --timeout=600s
+    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/kafka --timeout=600s
+    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/valkey --timeout=600s
+    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/connect --timeout=600s
 
 # Tópicos criados antes do connector: 3 partições, retenção infinita, sem compaction
 create-topics:
@@ -51,6 +51,18 @@ connector:
 
 down:
     kind delete cluster --name {{cluster}}
+
+# Expõe Kafka (9094), Valkey (6379) e Postgres (5432) em localhost.
+# Deixe rodando em um terminal separado.
+forward:
+    kubectl --context {{ctx}} -n {{ns}} port-forward pod/kafka-0 9094:9094 & \
+    kubectl --context {{ctx}} -n {{ns}} port-forward deploy/valkey 6379:6379 & \
+    kubectl --context {{ctx}} -n {{ns}} port-forward pod/postgres-0 5432:5432 & \
+    wait
+
+# Roda um cenário do mock writer. Ex.: just writer out-of-order
+writer scenario="lifecycle" prefix="":
+    dotnet run --project src/VehicleLocator.MockWriters -- {{scenario}} {{prefix}}
 
 # Ex.: just psql "SELECT * FROM vehicles"
 psql query:

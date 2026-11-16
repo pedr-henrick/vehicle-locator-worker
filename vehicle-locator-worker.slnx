@@ -19,9 +19,15 @@
     <File Path="devenv.nix" />
     <File Path="devenv.yaml" />
     <File Path="devspace.yaml" />
+    <File Path="global.json" />
     <File Path="justfile" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/VehicleLocator.Application/VehicleLocator.Application.csproj" />
+    <Project Path="src/VehicleLocator.MockWriters/VehicleLocator.MockWriters.csproj" />
     <Project Path="src/VehicleLocator.Worker/VehicleLocator.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VehicleLocator.UnitTests/VehicleLocator.UnitTests.csproj" />
   </Folder>
 </Solution>
