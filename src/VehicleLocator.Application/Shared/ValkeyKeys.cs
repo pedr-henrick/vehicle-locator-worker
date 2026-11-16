@@ -8,4 +8,9 @@ public static class ValkeyKeys
     public const string State = "state";
     public const string StateTs = "stateTs";
     public const string StateLsn = "stateLsn";
+
+    public const string Lat = "lat";
+    public const string Lng = "lng";
+    public const string PosTs = "posTs";
+    public const string PosLsn = "posLsn";
 }

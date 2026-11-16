@@ -18,10 +18,28 @@ public class ValkeyKeysTests
     }
 
     [Fact]
-    public void Field_names_are_stable()
+    public void State_field_names_are_stable()
     {
         Assert.Equal("state", ValkeyKeys.State);
         Assert.Equal("stateTs", ValkeyKeys.StateTs);
         Assert.Equal("stateLsn", ValkeyKeys.StateLsn);
+    }
+
+    [Fact]
+    public void Position_field_names_are_stable()
+    {
+        Assert.Equal("lat", ValkeyKeys.Lat);
+        Assert.Equal("lng", ValkeyKeys.Lng);
+        Assert.Equal("posTs", ValkeyKeys.PosTs);
+        Assert.Equal("posLsn", ValkeyKeys.PosLsn);
+    }
+
+    [Fact]
+    public void State_and_position_slices_never_share_a_field()
+    {
+        string[] state = [ValkeyKeys.State, ValkeyKeys.StateTs, ValkeyKeys.StateLsn];
+        string[] position = [ValkeyKeys.Lat, ValkeyKeys.Lng, ValkeyKeys.PosTs, ValkeyKeys.PosLsn];
+
+        Assert.Empty(state.Intersect(position));
     }
 }

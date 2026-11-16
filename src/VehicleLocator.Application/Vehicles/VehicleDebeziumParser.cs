@@ -1,14 +1,9 @@
-﻿using System.Globalization;
-using System.Text.Json;
+﻿using System.Text.Json;
+using VehicleLocator.Application.Shared;
 
 namespace VehicleLocator.Application.Vehicles;
 
-public enum ParseKind { Change, Tombstone, Invalid }
-
-public sealed record VehicleParseResult(
-    ParseKind Kind,
-    VehicleChange? Change = null,
-    string? Error = null);
+public sealed record VehicleParseResult(ParseKind Kind, VehicleChange? Change = null, string? Error = null);
 
 public static class VehicleDebeziumParser
 {
@@ -35,19 +30,18 @@ public static class VehicleDebeziumParser
                             after.GetProperty("id").GetString()!,
                             VehicleChangeKind.Upsert,
                             after.GetProperty("state").GetString()!,
-                            ToMicros(after.GetProperty("updated_at").GetString()!),
+                            DebeziumTime.ToMicros(after.GetProperty("updated_at").GetString()!),
                             lsn);
                         return new VehicleParseResult(ParseKind.Change, change);
                     }
                 case "d":
                     {
-                        // Com REPLICA IDENTITY FULL o "before" vem completo.
                         var before = root.GetProperty("before");
                         var change = new VehicleChange(
                             before.GetProperty("id").GetString()!,
                             VehicleChangeKind.Delete,
                             null,
-                            ToMicros(before.GetProperty("updated_at").GetString()!),
+                            DebeziumTime.ToMicros(before.GetProperty("updated_at").GetString()!),
                             lsn);
                         return new VehicleParseResult(ParseKind.Change, change);
                     }
@@ -64,11 +58,4 @@ public static class VehicleDebeziumParser
 
     private static VehicleParseResult Invalid(string error) =>
         new(ParseKind.Invalid, null, error);
-
-    private static long ToMicros(string iso)
-    {
-        var dto = DateTimeOffset.Parse(iso, CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal);
-        return (dto.UtcTicks - DateTime.UnixEpoch.Ticks) / 10;
-    }
 }

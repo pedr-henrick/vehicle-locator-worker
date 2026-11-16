@@ -1,4 +1,5 @@
-﻿using VehicleLocator.Application.Vehicles;
+﻿using VehicleLocator.Application.Shared;
+using VehicleLocator.Application.Vehicles;
 
 namespace VehicleLocator.UnitTests.VehicleLocator.Application.Vehicles;
 
