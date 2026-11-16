@@ -1,18 +1,30 @@
 ﻿namespace VehicleLocator.Application.Vehicles
 {
-    /// <summary>O que está hoje no hash vehicle:{id} (campos do estado).</summary>
-    public sealed record VehicleViewState(string State, long UpdatedAtMicros, long Lsn);
+    /// <summary>
+    /// Represents a vehicle's current view state and its update metadata.
+    /// </summary>
+    /// <param name="State">The vehicle's state.</param>
+    /// <param name="UpdatedAtMicros">The time of the update, in microseconds.</param>
+    /// <param name="Lsn">The log sequence number associated with the update.</param>
+    public sealed record VehicleViewState(
+        string State,
+        long UpdatedAtMicros,
+        long Lsn);
 
     public enum VehicleDecision
     {
-        Apply,           // grava state, stateTs, stateLsn
-        Remove,          // DEL vehicle:{id} + SET deleted:{id}
+        Apply,
+        Remove,
         IgnoreStale,
         IgnoreDuplicate,
-        IgnoreDeleted    // evento após o delete: premissa de id único violada (logar warning)
+        IgnoreDeleted
     }
 
-    /// <summary>Regra pura, sem I/O.</summary>
+    /// <summary>
+    /// Determines whether a vehicle change should be applied, removed, or ignored.
+    /// </summary>
+    /// <remarks>Non-delete changes are ordered by update timestamp and then log sequence number. Delete
+    /// changes bypass version comparison.</remarks>
     public static class VehicleDecider
     {
         public static VehicleDecision Decide(
@@ -22,8 +34,6 @@
         {
             if (change.Kind == VehicleChangeKind.Delete)
             {
-                // Delete não passa por comparação de versão: o before traz o
-                // updated_at antigo, então comparar poderia ignorá-lo por engano.
                 return isDeleted ? VehicleDecision.IgnoreDuplicate : VehicleDecision.Remove;
             }
 

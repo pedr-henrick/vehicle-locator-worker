@@ -2,7 +2,6 @@
 
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
-		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UserSecretsId>dotnet-VehicleLocatorWorker-57fcb2e8-07d4-4f0e-bf1f-7dc37001b1f4</UserSecretsId>
 	</PropertyGroup>

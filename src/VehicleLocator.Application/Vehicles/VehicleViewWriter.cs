@@ -1,73 +1,70 @@
 ﻿using StackExchange.Redis;
 using VehicleLocator.Application.Shared;
 
-namespace VehicleLocator.Application.Vehicles
+namespace VehicleLocator.Application.Vehicles;
+
+/// <summary>
+/// Writes vehicle changes to the view using optimistic concurrency.
+/// </summary>
+/// <remarks>Changes are applied only when the vehicle state and deletion marker have not changed since they were
+/// read.</remarks>
+/// <param name="mux">The connection multiplexer used to access the vehicle view store.</param>
+public sealed class VehicleViewWriter(IConnectionMultiplexer mux)
 {
-    /// <summary>
-    /// Só I/O: lê o estado atual, pergunta ao VehicleDecider e grava com transação
-    /// condicional (WATCH/MULTI/EXEC por baixo). Se alguém alterar o que foi lido
-    /// antes do EXEC, a transação aborta e a leitura recomeça.
-    /// </summary>
-    public sealed class VehicleViewWriter(IConnectionMultiplexer mux)
+    public Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
+        OptimisticWrite.RunAsync(() => TryApplyAsync(change));
+
+    private async Task<(bool Committed, VehicleDecision Result)> TryApplyAsync(VehicleChange change)
     {
-        public Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
-            OptimisticWrite.RunAsync(() => TryApplyAsync(change));
+        var db = mux.GetDatabase();
+        var vehicleKey = ValkeyKeys.Vehicle(change.VehicleId);
+        var deletedKey = ValkeyKeys.Deleted(change.VehicleId);
 
-        private async Task<(bool Committed, VehicleDecision Result)> TryApplyAsync(VehicleChange change)
+        var isDeleted = await db.KeyExistsAsync(deletedKey);
+        var fields = await db.HashGetAsync(vehicleKey,
+            [ValkeyKeys.StateTs, ValkeyKeys.StateLsn, ValkeyKeys.State]);
+
+        VehicleViewState? current = fields[0].IsNull
+            ? null
+            : new VehicleViewState((string)fields[2]!, (long)fields[0], (long)fields[1]);
+
+        var decision = VehicleDecider.Decide(current, isDeleted, change);
+
+        if (decision is not (VehicleDecision.Apply or VehicleDecision.Remove))
+            return (true, decision);
+
+        var tran = db.CreateTransaction();
+
+        tran.AddCondition(isDeleted
+            ? Condition.KeyExists(deletedKey)
+            : Condition.KeyNotExists(deletedKey));
+
+        if (decision == VehicleDecision.Apply)
         {
-            var db = mux.GetDatabase();
-            var vehicleKey = ValkeyKeys.Vehicle(change.VehicleId);
-            var deletedKey = ValkeyKeys.Deleted(change.VehicleId);
-
-            var isDeleted = await db.KeyExistsAsync(deletedKey);
-            var fields = await db.HashGetAsync(vehicleKey,
-                [ValkeyKeys.StateTs, ValkeyKeys.StateLsn, ValkeyKeys.State]);
-
-            VehicleViewState? current = fields[0].IsNull
-                ? null
-                : new VehicleViewState((string)fields[2]!, (long)fields[0], (long)fields[1]);
-
-            var decision = VehicleDecider.Decide(current, isDeleted, change);
-
-            if (decision is not (VehicleDecision.Apply or VehicleDecision.Remove))
-                return (true, decision);
-
-            var tran = db.CreateTransaction();
-
-            // O marcador de delete não pode ter mudado desde a leitura.
-            tran.AddCondition(isDeleted
-                ? Condition.KeyExists(deletedKey)
-                : Condition.KeyNotExists(deletedKey));
-
-            if (decision == VehicleDecision.Apply)
+            if (current is null)
             {
-                // O estado não pode ter mudado desde a leitura. Se não havia estado, ainda
-                // não pode haver: o hash pode existir só com campos de posição.
-                if (current is null)
-                {
-                    tran.AddCondition(Condition.HashNotExists(vehicleKey, ValkeyKeys.StateTs));
-                }
-                else
-                {
-                    tran.AddCondition(Condition.HashEqual(vehicleKey, ValkeyKeys.StateTs, current.UpdatedAtMicros));
-                    tran.AddCondition(Condition.HashEqual(vehicleKey, ValkeyKeys.StateLsn, current.Lsn));
-                }
-
-                _ = tran.HashSetAsync(vehicleKey,
-                [
-                    new HashEntry(ValkeyKeys.State, change.State!),
-                new HashEntry(ValkeyKeys.StateTs, change.UpdatedAtMicros),
-                new HashEntry(ValkeyKeys.StateLsn, change.Lsn)
-                ]);
+                tran.AddCondition(Condition.HashNotExists(vehicleKey, ValkeyKeys.StateTs));
             }
             else
             {
-                _ = tran.KeyDeleteAsync(vehicleKey);
-                _ = tran.StringSetAsync(deletedKey, "1");
+                tran.AddCondition(Condition.HashEqual(vehicleKey, ValkeyKeys.StateTs, current.UpdatedAtMicros));
+                tran.AddCondition(Condition.HashEqual(vehicleKey, ValkeyKeys.StateLsn, current.Lsn));
             }
 
-            var committed = await tran.ExecuteAsync();
-            return (committed, decision);
+            _ = tran.HashSetAsync(vehicleKey,
+            [
+                new HashEntry(ValkeyKeys.State, change.State!),
+            new HashEntry(ValkeyKeys.StateTs, change.UpdatedAtMicros),
+            new HashEntry(ValkeyKeys.StateLsn, change.Lsn)
+            ]);
         }
+        else
+        {
+            _ = tran.KeyDeleteAsync(vehicleKey);
+            _ = tran.StringSetAsync(deletedKey, "1");
+        }
+
+        var committed = await tran.ExecuteAsync();
+        return (committed, decision);
     }
 }

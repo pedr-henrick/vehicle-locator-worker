@@ -1,12 +1,11 @@
-﻿namespace VehicleLocator.Application.Shared
+﻿namespace VehicleLocator.Application.Shared;
+
+public enum ProjectionResult
 {
-    public enum ProjectionResult
-    {
-        Applied,
-        IgnoredStale,
-        IgnoredDuplicate,
-        IgnoredDeleted,
-        IgnoredTombstone,
-        Invalid
-    }
+    Applied,
+    IgnoredStale,
+    IgnoredDuplicate,
+    IgnoredDeleted,
+    IgnoredTombstone,
+    Invalid
 }

@@ -7,14 +7,12 @@ var connectionString = Environment.GetEnvironmentVariable("POSTGRES")
 
 await using var ds = NpgsqlDataSource.Create(connectionString);
 
-// Base fixa: o mesmo cenário gera sempre os mesmos updated_at.
 var t0 = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 var id = $"{prefix}-1";
 
 switch (scenario)
 {
     case "lifecycle":
-        // Esperado: state=MAINTENANCE
         await Insert(id, "REGISTERED", t0);
         await Update(id, "ACTIVE", t0.AddMinutes(1));
         await Update(id, "IDLE", t0.AddMinutes(2));
@@ -22,15 +20,12 @@ switch (scenario)
         break;
 
     case "out-of-order":
-        // O último update tem updated_at antigo, mas LSN maior.
-        // Esperado: state=ACTIVE, e o log do worker mostra IgnoreStale.
         await Insert(id, "REGISTERED", t0);
         await Update(id, "ACTIVE", t0.AddMinutes(10));
         await Update(id, "IDLE", t0.AddMinutes(5));
         break;
 
     case "delete":
-        // Esperado: vehicle:{id} ausente e deleted:{id} presente.
         await Insert(id, "REGISTERED", t0);
         await Update(id, "ACTIVE", t0.AddMinutes(1));
         await Delete(id);
@@ -58,5 +53,6 @@ async Task Exec(string sql, params object[] values)
     await using var cmd = ds.CreateCommand(sql);
     foreach (var v in values)
         cmd.Parameters.Add(new NpgsqlParameter { Value = v });
+
     await cmd.ExecuteNonQueryAsync();
 }

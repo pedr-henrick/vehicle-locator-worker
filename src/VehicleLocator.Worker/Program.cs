@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using VehicleLocator.Application.Vehicles;
-using VehicleLocator.Worker;
-using VehicleLocator.Worker.Kafka;
+using VehicleLocator.Worker.Consumers;
+using VehicleLocator.Worker.Support.Kafka;
+using VehicleLocator.Worker.Support.Valkey;
 
 var builder = Host.CreateApplicationBuilder(args);
 

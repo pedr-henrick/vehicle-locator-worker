@@ -1,13 +1,11 @@
-﻿namespace VehicleLocator.Application.Shared
-{
-    public static class ValkeyKeys
-    {
-        public static string Vehicle(string id) => $"vehicle:{id}";
-        public static string Deleted(string id) => $"deleted:{id}";
+﻿namespace VehicleLocator.Application.Shared;
 
-        // Campos do hash vehicle:{id}. Veículos escreve estes três; posições escreverá lat/lng/pos*.
-        public const string State = "state";
-        public const string StateTs = "stateTs";
-        public const string StateLsn = "stateLsn";
-    }
+public static class ValkeyKeys
+{
+    public static string Vehicle(string id) => $"vehicle:{id}";
+    public static string Deleted(string id) => $"deleted:{id}";
+
+    public const string State = "state";
+    public const string StateTs = "stateTs";
+    public const string StateLsn = "stateLsn";
 }
