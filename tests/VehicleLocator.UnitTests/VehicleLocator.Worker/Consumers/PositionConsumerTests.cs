@@ -4,7 +4,7 @@ using NSubstitute;
 using StackExchange.Redis;
 using VehicleLocator.Application.Positions;
 using VehicleLocator.Application.Shared;
-using VehicleLocator.Worker;
+using VehicleLocator.Worker.Consumers;
 using VehicleLocator.Worker.Support.Kafka;
 
 namespace VehicleLocator.UnitTests.VehicleLocator.Worker.Consumers;

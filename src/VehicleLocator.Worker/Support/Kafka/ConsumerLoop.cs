@@ -4,13 +4,6 @@ using VehicleLocator.Application.Shared;
 
 namespace VehicleLocator.Worker.Support.Kafka;
 
-/// <summary>
-/// Processes a message and produces a projection result.
-/// </summary>
-/// <param name="key">The message key.</param>
-/// <param name="value">The message value.</param>
-/// <param name="ct">A token to monitor for cancellation requests.</param>
-/// <returns>A task representing the asynchronous operation, with the projection result.</returns>
 public delegate Task<ProjectionResult> MessageHandler(string key, string value, CancellationToken ct);
 
 public class ConsumerLoop(IKafkaConsumerFactory factory, IOptions<KafkaOptions> options, ILogger<ConsumerLoop> logger) : IConsumerLoop
@@ -38,16 +31,6 @@ public class ConsumerLoop(IKafkaConsumerFactory factory, IOptions<KafkaOptions> 
         }
     }
 
-    /// <summary>
-    /// Processes a consumed message, committing it after handling or seeking it for retry if handling fails.
-    /// </summary>
-    /// <remarks>Invalid events are logged and committed. Exceptions other than <see
-    /// cref="OperationCanceledException"/> are logged, and the message is sought for retry; an optional delay is
-    /// applied before returning.</remarks>
-    /// <param name="consumer">The Kafka consumer used to commit or seek the message offset.</param>
-    /// <param name="result">The consumed message and its topic, partition, and offset.</param>
-    /// <param name="handle">The handler invoked with the message key, value, and cancellation token.</param>
-    /// <param name="ct">The cancellation token passed to the handler.</param>
     public void Process(IConsumer<string, string> consumer, ConsumeResult<string, string> result, MessageHandler handle, CancellationToken ct)
     {
         try
