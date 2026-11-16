@@ -14,6 +14,7 @@
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+		<PackageReference Include="NSubstitute" Version="6.2.0" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="4.0.1">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -23,6 +24,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\VehicleLocator.Application\VehicleLocator.Application.csproj" />
+		<ProjectReference Include="..\..\src\VehicleLocator.Worker\VehicleLocator.Worker.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

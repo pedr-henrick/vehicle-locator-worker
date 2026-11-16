@@ -3,7 +3,9 @@ using VehicleLocator.Application.Shared;
 
 namespace VehicleLocator.Application.Vehicles;
 
-public sealed class ApplyVehicleChangeUseCase(VehicleViewWriter writer, ILogger<ApplyVehicleChangeUseCase> logger)
+public class ApplyVehicleChangeUseCase(
+    VehicleViewWriter writer,
+    ILogger<ApplyVehicleChangeUseCase> logger)
 {
     public async Task<ProjectionResult> ExecuteAsync(string? key, string? value, CancellationToken ct)
     {
@@ -29,13 +31,15 @@ public sealed class ApplyVehicleChangeUseCase(VehicleViewWriter writer, ILogger<
         logger.LogInformation("Vehicle {VehicleId} {Kind} lsn={Lsn} -> {Decision}",
             change.VehicleId, change.Kind, change.Lsn, decision);
 
-        return decision switch
-        {
-            VehicleDecision.Apply or VehicleDecision.Remove => ProjectionResult.Applied,
-            VehicleDecision.IgnoreStale => ProjectionResult.IgnoredStale,
-            VehicleDecision.IgnoreDuplicate => ProjectionResult.IgnoredDuplicate,
-            VehicleDecision.IgnoreDeleted => ProjectionResult.IgnoredDeleted,
-            _ => ProjectionResult.Invalid
-        };
+        return ToResult(decision);
     }
+
+    public static ProjectionResult ToResult(VehicleDecision decision) => decision switch
+    {
+        VehicleDecision.Apply or VehicleDecision.Remove => ProjectionResult.Applied,
+        VehicleDecision.IgnoreStale => ProjectionResult.IgnoredStale,
+        VehicleDecision.IgnoreDuplicate => ProjectionResult.IgnoredDuplicate,
+        VehicleDecision.IgnoreDeleted => ProjectionResult.IgnoredDeleted,
+        _ => ProjectionResult.Invalid
+    };
 }

@@ -3,15 +3,9 @@ using VehicleLocator.Application.Shared;
 
 namespace VehicleLocator.Application.Vehicles;
 
-/// <summary>
-/// Writes vehicle changes to the view using optimistic concurrency.
-/// </summary>
-/// <remarks>Changes are applied only when the vehicle state and deletion marker have not changed since they were
-/// read.</remarks>
-/// <param name="mux">The connection multiplexer used to access the vehicle view store.</param>
-public sealed class VehicleViewWriter(IConnectionMultiplexer mux)
+public class VehicleViewWriter(IConnectionMultiplexer mux)
 {
-    public Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
+    public virtual Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
         OptimisticWrite.RunAsync(() => TryApplyAsync(change));
 
     private async Task<(bool Committed, VehicleDecision Result)> TryApplyAsync(VehicleChange change)
@@ -54,8 +48,8 @@ public sealed class VehicleViewWriter(IConnectionMultiplexer mux)
             _ = tran.HashSetAsync(vehicleKey,
             [
                 new HashEntry(ValkeyKeys.State, change.State!),
-            new HashEntry(ValkeyKeys.StateTs, change.UpdatedAtMicros),
-            new HashEntry(ValkeyKeys.StateLsn, change.Lsn)
+                new HashEntry(ValkeyKeys.StateTs, change.UpdatedAtMicros),
+                new HashEntry(ValkeyKeys.StateLsn, change.Lsn)
             ]);
         }
         else

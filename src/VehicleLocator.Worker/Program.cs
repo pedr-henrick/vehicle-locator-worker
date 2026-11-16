@@ -13,7 +13,8 @@ builder.Services.Configure<ValkeyOptions>(builder.Configuration.GetSection("Valk
 builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     ConnectionMultiplexer.Connect(sp.GetRequiredService<IOptions<ValkeyOptions>>().Value.ConnectionString));
 
-builder.Services.AddSingleton<ConsumerLoop>();
+builder.Services.AddSingleton<IKafkaConsumerFactory, KafkaConsumerFactory>();
+builder.Services.AddSingleton<IConsumerLoop, ConsumerLoop>();
 builder.Services.AddSingleton<VehicleViewWriter>();
 builder.Services.AddSingleton<ApplyVehicleChangeUseCase>();
 builder.Services.AddHostedService<VehicleConsumer>();
