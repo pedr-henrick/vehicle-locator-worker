@@ -1,4 +1,5 @@
 ﻿using VehicleLocator.Application.Positions;
+using VehicleLocator.UnitTests.Support.Helpers;
 
 namespace VehicleLocator.UnitTests.VehicleLocator.Application.Positions;
 

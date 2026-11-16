@@ -7,7 +7,7 @@ using VehicleLocator.Application.Vehicles;
 using VehicleLocator.Worker.Consumers;
 using VehicleLocator.Worker.Support.Kafka;
 
-namespace VehicleLocator.UnitTests.VehicleLocator.Worker;
+namespace VehicleLocator.UnitTests.VehicleLocator.Worker.Consumers;
 
 public class VehicleConsumerTests
 {

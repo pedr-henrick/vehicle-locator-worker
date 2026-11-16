@@ -1,4 +1,4 @@
-﻿namespace VehicleLocator.UnitTests;
+﻿namespace VehicleLocator.UnitTests.Support.Helpers;
 
 internal static class TestPermutations
 {

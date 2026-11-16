@@ -2,7 +2,7 @@
 using VehicleLocator.Application.Positions;
 using VehicleLocator.Worker.Support.Kafka;
 
-namespace VehicleLocator.Worker;
+namespace VehicleLocator.Worker.Consumers;
 
 public sealed class PositionConsumer(IConsumerLoop loop, ApplyPositionChangeUseCase useCase, IOptions<KafkaOptions> options) : BackgroundService
 {
