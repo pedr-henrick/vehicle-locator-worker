@@ -1,0 +1,20 @@
+{
+  "name": "fleet-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres.fleet.svc.cluster.local",
+    "database.port": "5432",
+    "database.user": "fleet",
+    "database.password": "fleet",
+    "database.dbname": "fleet",
+    "topic.prefix": "fleet",
+    "plugin.name": "pgoutput",
+    "publication.name": "fleet_pub",
+    "publication.autocreate.mode": "disabled",
+    "slot.name": "fleet_slot",
+    "table.include.list": "public.vehicles,public.positions",
+    "message.key.columns": "public.positions:vehicle_id",
+    "snapshot.mode": "initial",
+    "tombstones.on.delete": "true"
+  }
+}

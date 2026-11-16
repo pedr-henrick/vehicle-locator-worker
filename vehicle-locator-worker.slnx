@@ -1,8 +1,14 @@
 <Solution>
   <Folder Name="/deploy/" />
+  <Folder Name="/deploy/connect/">
+    <File Path="deploy/connect/connector.json" />
+  </Folder>
   <Folder Name="/deploy/k8s/">
+    <File Path="deploy/k8s/connect.yaml" />
+    <File Path="deploy/k8s/kafka.yaml" />
     <File Path="deploy/k8s/postgres-init.sql" />
     <File Path="deploy/k8s/postgres.yaml" />
+    <File Path="deploy/k8s/valkey.yaml" />
   </Folder>
   <Folder Name="/deploy/kind/">
     <File Path="deploy/kind/kind-config.yaml" />
