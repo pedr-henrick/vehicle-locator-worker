@@ -82,9 +82,11 @@ A posição é aplicada normalmente e cria o hash só com campos de posição. `
 
 Eventos `op=r` (snapshot) e `op=c/u` são tratados pela mesma regra de versão. No snapshot, linhas podem ter LSN repetido; o desempate fica determinístico (primeiro aplicado vence quando timestamp e LSN são iguais), o que também vale no replay.
 
+O E2E verifica se o conector já existe, semeia `snapshot-pre` e, em cluster novo, registra o conector Debezium antes de confirmar eventos `op=r` nos dois tópicos; depois aplica `snapshot-post` por streaming. Se o conector já existir no cluster reutilizado, a recipe avisa que o snapshot inicial não será repetido e continua os cenários por streaming. Para validar o snapshot novamente, use um cluster limpo (`just down && just e2e`).
+
 ### 9. Replay
 
-- Replay **no mesmo processo e no mesmo código** de projeção: `Replay:Enabled=true` altera apenas o group id (`<grupo>-replay-<sufixo>`, sufixo padrão = timestamp UTC, garantindo grupo novo e leitura do offset 0) e o banco lógico do Valkey.
+- Replay **no mesmo processo e no mesmo código** de projeção: `Replay:Enabled=true` altera apenas o group id (`<grupo>-replay-<sufixo>`, sufixo padrão = timestamp UTC + GUID, garantindo grupo novo por execução e leitura do offset 0) e o banco lógico do Valkey.
 - Destino do replay: **banco lógico do Valkey** (`Valkey:Database`), não prefixo de chave. Motivo: não altera `ValkeyKeys` nem os writers, e as chaves ficam idênticas dos dois lados, tornando a comparação trivial.
 - Trava: com `Replay:Enabled=true` e `Database=0`, o worker **recusa subir**, para nunca sobrescrever o cache real.
 - Retenção infinita nos tópicos, sem compaction, para o log ser fonte completa.
@@ -97,7 +99,7 @@ Eventos `op=r` (snapshot) e `op=c/u` são tratados pela mesma regra de versão. 
 
 ### 11. Poison message
 
-Log, skip e commit. Em produção, enviar a uma DLQ. Mensagens inválidas (JSON quebrado, lat/lng fora de faixa) não podem travar a partição.
+Log, skip e commit. Em produção, enviar a uma DLQ. JSON malformatado. campos ausentes/nulos. operações ou estados não suportados, timestamps inválidos e lat/lng fora de faixa são inválidos e não podem travar a partição. Tombstone Kafka (value `null`) é tratado separadamente e ignorado.
 
 ### 12. Bibliotecas e ambiente
 
@@ -143,10 +145,10 @@ Sem FK em `positions.vehicle_id` (necessário para gerar a corrida) e sem unique
 
 Registrado de forma explícita porque nem tudo foi validado:
 
-- **Não validado no cluster:** `Dockerfile` (imagem única worker + mockwriters), `worker.yaml`, `worker-replay.yaml`, recipes `image`, `mock-job`, `replay`, `e2e` do `justfile`. O código compila e os testes unitários passam (130 na última contagem); o e2e completo ainda não rodou.
-- **Cortado por tempo:** testes de integração com Testcontainers (writers contra Valkey real e `ConsumerLoop` contra Kafka real). A concorrência entre leitura e `EXEC` é coberta apenas por testes unitários com mock.
+- **Não validado ponta a ponta no cluster:** `Dockerfile` (imagem única worker + mockwriters), `worker.yaml`, `worker-replay.yaml` e recipes `image`, `mock-job`, `replay`, `e2e` do `justfile`. O build da solução passa e a execução atual teve 175 testes unitários aprovados e 0 falhas.
+- **Testes de integração não incluídos por decisão consciente:** O enunciado não os exige. O risco aceito é que a atomicidade de `AddCondition` contra o Valkey real e o `ConsumerLoop` contra o kafka real não foram validados com esses serviços. Os testes unitários usam mocks.
 - `assert-view` não confere `posTs`/`stateTs` e usa chaves em literal (não `ValkeyKeys`).
 - Em `positions`, mesmo `recorded_at` **e** mesmo LSN (possível no snapshot) é tratado como duplicata. Alternativa em aberto: usar o `id` da linha como terceiro desempate.
-- O restart do worker no e2e não é determinístico quanto a haver reentrega; o e2e prova o resultado final, não que `IgnoreDuplicate` ocorreu.
+- O snapshot inicial só é exercitado com o connector novo; em cluster reutilizado a recipe avisa e segue pelo streaming.
+- O E2E reinicia o worker durante `seed-stream` (`rate=40`, após o primeiro log `progresso`), mas não é determinístico quanto a haver reentrega; o e2e prova o resultado final, não que `IgnoreDuplicate` ocorreu.
 - Nível de log de `IgnoreDeleted` em veículos (hoje Warning) é ruído no replay.
-- Mocks sem taxa configurável.

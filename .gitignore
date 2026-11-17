@@ -147,3 +147,6 @@ devenv.local.yaml
 
 # DevSpace
 .devspace/
+
+# TestResults
+TestResults/

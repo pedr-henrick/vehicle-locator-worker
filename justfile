@@ -14,7 +14,9 @@ vk := "valkey.fleet.svc.cluster.local:6379"
 # Prefixo único por execução do e2e: ids não colidem em reexecuções no mesmo cluster.
 run_id := "e2e" + `date +%d%H%M%S`
 
-up: cluster namespace configs image deploy wait create-topics connector
+infra: cluster namespace configs image deploy wait create-topics
+
+up: infra connector
 
 cluster:
     kind get clusters | grep -qx {{cluster}} \
@@ -58,7 +60,7 @@ create-topics:
         --partitions 3 --replication-factor 1 \
         --config retention.ms=-1 --config retention.bytes=-1 \
         --config cleanup.policy=delete; \
-    description=$$(kubectl --context {{ctx}} -n {{ns}} exec kafka-0 -- \
+    description=$(kubectl --context {{ctx}} -n {{ns}} exec kafka-0 -- \
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
         --describe --topic $t); \
       echo "$description"; \
@@ -83,8 +85,46 @@ down:
 # ---------------------------------------------------------------- e2e
 
 # Fluxo completo. Cada etapa é uma recipe; falha em qualquer uma interrompe com código != 0.
-e2e: up seed-a restart-worker seed-b assert replay
+e2e: infra snapshot seed-a seed-stream-restart seed-b assert replay
     @echo "E2E OK: view correta (db 0) e replay idêntico (db 1)."
+
+
+# Semear antes do connector para validar snapshot inicial; em cluster reutilizado,
+# os snapshots ainda serão consumidos como streaming, mas não haverá um novo snapshot.
+snapshot:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    K="kubectl --context {{ctx}} -n {{ns}}"
+    JUST="{{just_executable()}}"
+    connector_status=$($K exec deploy/connect -- curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8083/connectors/fleet-connector)
+    "$JUST" mock-job seed-snap-pre seed {{run_id}} snapshot-pre
+    if [ "$connector_status" = 200 ]; then
+      echo "Aviso: o conector já existia; o snapshot inicial não será repetido nesse cluster."
+    else
+      "$JUST" connector
+      snapshot_found=false
+      for attempt in $(seq 1 20); do
+        vehicles=$($K exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh \
+          --bootstrap-server localhost:9092 --topic fleet.public.vehicles \
+          --from-beginning --timeout-ms 1500  --property print.key=true 2>/dev/null || true)
+        positions=$($K exec kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh \
+          --bootstrap-server localhost:9092 --topic fleet.public.positions \
+          --from-beginning --timeout-ms 1500  --property print.key=true 2>/dev/null || true)
+        if grep -F '{{run_id}}-snapshot-only-1' <<< "$vehicles" \
+        | grep -Eq '"op"[[:space:]]*"[[:space:]]*"r"' \
+        && grep -F '{{run_id}}-snapshot-only-1' <<< "$positions" \
+        | grep -Eq '"op"[[:space:]]*"[[:space:]]*"r"'; then
+          snapshot_found=true
+          break
+        fi
+        sleep 3
+      done
+      if [ "$snapshot_found" != true ]; then
+        echo "Não foi possível confirmar eventos op=r do snapshot inicial nos tópicos Kafka" >&2
+        exit 1
+      fi
+    fi
+    "$JUST" mock-job seed-snap-post seed {{run_id}} snapshot-post
 
 # Grupo A: veículos + volume.
 seed-a: (mock-job "seed-a" "seed" run_id "a")
@@ -92,10 +132,39 @@ seed-a: (mock-job "seed-a" "seed" run_id "a")
 # Grupo B: posições (inclui posição antes do veículo e depois do delete).
 seed-b: (mock-job "seed-b" "seed" run_id "b")
 
-# Mata o pod do worker logo após o grupo A, sem esperar convergência.
-# O Deployment recria o pod, que retoma dos offsets commitados enquanto o grupo B é escrito.
-restart-worker:
-    kubectl --context {{ctx}} -n {{ns}} delete pod -l app=worker --wait=false
+# Reinicia o worker depois do primeiro progresso do stream, enquanto o Job continua gravando.
+seed-stream-restart:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    K="kubectl --context {{ctx}} -n {{ns}}"
+    JUST="{{just_executable()}}"
+    "$JUST" mock-job-start seed-stream stream {{run_id}} rate=40
+    deadline=$((SECONDS + {{job_timeout}}))
+    while [ "$SECONDS" -lt "$deadline" ]; do
+      logs=$($K logs job/seed-stream 2>/dev/null || true)
+      if grep -q '^progresso:' <<< "$logs"; then
+         echo "Primeiro progresso do stream observado; reiniciando o worker."
+         $K delete pod -l app=worker --wait=false
+         "$JUST" mock-job-wait seed-stream
+         exit 0
+      fi
+      failed=$($K get job seed-stream -o jsonpath='{.status.failed}')
+      if [ "${failed:-0}" -ge 1 ]; then
+        $K logs job/seed-stream || true
+        echo "Job seed-stream FALHOU antes do primeiro progresso"
+        exit 1
+      fi
+      suceeded=$($K get job seed-stream -o jsonpath='{.status.succeeded}')
+      if [ "${suceeded:-0}" -ge 1 ]; then
+        $K logs job/seed-stream || true
+        echo "Job seed-stream terminou antes do primeiro progresso"
+        exit 1
+      fi
+      sleep 1
+    done
+    $K logs job/seed-stream || true
+    echo "Timeout aguardando o primeiro progresso do stream." >&2
+    exit 1
 
 # Só compara com o esperado depois que o db 0 convergiu (polling de até 180s).
 assert: (mock-job "assert-view" "assert-view" run_id "180" "0")
@@ -117,6 +186,14 @@ replay:
 mock-job name *args:
     #!/usr/bin/env bash
     set -euo pipefail
+    JUST="{{just_executable()}}"
+    "$JUST" mock-job-start {{name}} {{args}}
+    "$JUST" mock-job-wait {{name}}
+
+# Cria um job sem esperar sua conclução
+mock-job-start name *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
     K="kubectl --context {{ctx}} -n {{ns}}"
     $K delete job {{name}} --ignore-not-found
     $K create job {{name}} --image={{image}} --dry-run=client -o json \
@@ -124,6 +201,12 @@ mock-job name *args:
       | jq --arg pg "{{pg}}" --arg vk "{{vk}}" \
           '.spec.backoffLimit = 0 | .spec.template.spec.containers[0].env = [{name:"POSTGRES",value:$pg},{name:"VALKEY",value:$vk}]' \
       | $K apply -f -
+    
+# Espera um Job e mostra o log
+mock-job-await name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    K="kubectl --context {{ctx}} -n {{ns}}"
     deadline=$((SECONDS + {{job_timeout}}))
     while true; do
       ok=$($K get job {{name}} -o jsonpath='{.status.succeeded}')

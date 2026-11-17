@@ -100,14 +100,15 @@ Com `Replay__Enabled=true`: group id vira `<grupo>-replay-<sufixo>` (grupo novo,
 
 Um comando, a partir de checkout limpo: `just e2e`.
 
-1. `up`: kind, namespace, ConfigMaps, build e carga da imagem única (worker + mockwriters), deploy via devspace, espera, tópicos (3 partições, retenção infinita), connector.
-2. `seed-a` (Job): veículos (`lifecycle`, `out-of-order`, `delete`) e `volume` (200 posições embaralhadas com duplicatas).
-3. `restart-worker`: apaga o pod do worker logo após o grupo A.
-4. `seed-b` (Job): cenários de posição (fora de ordem, duplicada, antes do veículo, depois do delete).
-5. `assert`: Job `assert-view` com polling até 180 s contra os valores esperados no db 0.
-6. `replay`: FLUSHDB do db 1, Deployment `worker-replay`, Job `verify-replay`, remoção do Deployment (também em falha).
+1. `infra`: kind, namespace, ConfigMaps, build e carga da imagem única (worker + mockwriters), deploy via devspace, espera dos serviços, tópicos (3 partições, retenção infinita) e registro do conector Debezium.
+2. `snapshot`: cria os cenários `snapshot-only` e `snapshot-then-stream-pre`, confirma eventos `op=r` em cluster novo e executa `snapshot-then-stream-post` pelo streaming; em cluster reutilizado, avisa que o snapshot inicial não será repetido.
+3. `seed-a` (Job): veículos (`lifecycle`, `out-of-order`, `delete`) e `volume` (200 posições embaralhadas com duplicatas).
+4. `seed-stream-restart`: inicia `seed-stream` com `rate=40`, espera o primeiro log `progresso` e remove o pod do worker; o Deployment recria o worker antes da conclusão do Job.
+5. `seed-b` (Job): cenários de posição (fora de ordem, duplicada, antes do veículo e depois do delete).
+6. `assert`: Job `assert-view` com polling até 180 s contra os valores esperados no db 0, incluindo os veículos do stream.
+7. `replay`: FLUSHDB do db 1, Deployment `worker-replay` consumindo os tópicos desde o offset 0, Job `verify-replay` e remoção do Deployment em caso de sucesso ou falha.
 
-O replay só é comparado depois de o db 0 bater com o esperado; sem isso, "idêntico" provaria pouco. Todo passo falho devolve código diferente de zero.
+O replay só é comparado depois de o db 0 bater com o esperado; sem isso, "idêntico" provaria pouco. Todo passo falho devolve código diferente de zero. Para repetir o snapshot inicial, use um cluster limpo (`just down && just e2e`).
 
 ## 10. Sequenciamento
 
@@ -117,17 +118,19 @@ O replay só é comparado depois de o db 0 bater com o esperado; sem isso, "idê
 4. Slice de posições e testes de convergência entre streams.
 5. Validação manual: lifecycle, fora de ordem, delete, restart, posições.
 6. Replay no mesmo processo, `ViewComparer` e `verify-replay`.
-7. Imagem única, Jobs de mock, `assert-view` e `just e2e`.
-8. Documentos (ADR, Spec, test-behaviors, C4), README, PR.
+7. Cenários de snapshot, stream com taxa configurável e reinício do worker.
+8. Imagem única, Jobs de mock, `assert-view`, `verify-replay` e `just e2e`.
+9. Documentos (ADR, Spec, test-behaviors, C4), README, PR.
 
 Decisão de ordem: correção primeiro (deciders puros e testados), infra de e2e depois, para provar o que importa mesmo com tempo curto.
 
 ## 11. Cortes e pendências
 
-- **Não validado no cluster:** imagem única, `worker.yaml`, `worker-replay.yaml`, recipes `image`, `mock-job`, `replay`, `e2e`. Compila e os testes unitários passam; o e2e não rodou.
+- **Não validado ponta a ponta no cluster:** o build da solução passa e 175 testes unitários passam, mas nenhum fluxo `just e2e` completo foi validado no cluster.
 - **Cortado:** testes de integração com Testcontainers (writers contra Valkey real, `ConsumerLoop` contra Kafka real). A concorrência entre leitura e `EXEC` é coberta só por mock.
-- `assert-view` não confere `posTs`/`stateTs` e usa chaves em literal.
-- Mocks sem taxa configurável nem duplicatas de veículo em volume.
+- `assert-view` não confere `posTs`/`stateTs` nem `stateLsn`/`posLsn`; usa chaves em literal em vez de `ValkeyKeys`.
+- O scenario `stream` aceita taxa, volume, transições, seed, fora de ordem e duplicatas por parâmetros; o E2E usa `rate=40` e os valores padrão dos demais parâmetros.
 - Replay a partir de uma data (offset por timestamp): não implementado.
 - Desempate de posição com mesmo `recorded_at` e mesmo LSN usa "primeiro vence"; `id` da linha como 3º critério fica como alternativa.
-- Restart do e2e prova o resultado final, não que houve reentrega.
+- Restart do E2E prova o resultado final, mas não garante que houve reentrega; isso depende do timing.
+- Snapshot inicial só é exercitado corretamente em cluster novo ou com conector novo; em cluster reutilizado a recipe avisa e segue pelo streaming.

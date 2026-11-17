@@ -2,10 +2,10 @@
 
 Cada comportamento indica **onde é provado** e o **status real**. Convenções:
 
-- **Unit:** xUnit v3 + NSubstitute (130 testes passando na última execução).
+- **Unit:** xUnit v3 + NSubstitute (175 testes aprovados na execução atual).
 - **Manual:** executado contra o cluster com o worker local e `just forward`.
-- **E2E:** cenário do `just e2e` (Jobs de mock + `assert-view`). **Escrito, ainda não executado no cluster.**
-- **Integração:** Testcontainers (Valkey/Kafka reais). **Cortado por tempo.**
+- **E2E:** cenário implementado no fluxo do `just e2e` (Jobs de mock, `assert-view` e `verify-replay`). Ainda não validado ponta a ponta no cluster.
+- **Integração:** Testcontainers (Valkey/Kafka reais). Não incluído por decisão consciente.
 
 Em "duplicado", o que se afirma é o **valor final do cache**, não uma linha de log.
 
@@ -20,7 +20,8 @@ Em "duplicado", o que se afirma é o **valor final do cache**, não uma linha de
 | 5 | Delete/tombstone | sim | sim | escrito | cortado |
 | 6 | Posição antes do veículo | sim (cross-stream) | sim | escrito | cortado |
 | 7 | Restart no meio do stream | sim (`ConsumerLoop`) | sim | escrito | cortado |
-| 8 | Replay do offset 0 idêntico | sim (`ViewComparer`) | sim (3 casos) | escrito | cortado |
+| 8 | Snapshot CDC e streaming subsequente | sim (parser/decider) | parcial | escrito | cortado |
+| 9 | Replay do offset 0 idêntico | sim (`ViewComparer`) | sim (3 casos) | escrito | cortado |
 
 ## 1. Atualização de estado
 
@@ -50,7 +51,7 @@ Em "duplicado", o que se afirma é o **valor final do cache**, não uma linha de
 - **When** o mesmo evento chega de novo (reentrega) ou uma linha idêntica é inserida duas vezes.
 - **Then** o cache fica idêntico ao de antes; nenhuma escrita altera valor.
 - Nuance: duas linhas idênticas no banco têm LSNs diferentes, então o log mostra `Apply` duas vezes (o LSN maior vence com o mesmo resultado). `IgnoreDuplicate` ocorre só com mesmo timestamp **e** mesmo LSN, isto é, reentrega do mesmo evento. Por isso a asserção é sobre o valor final.
-- Prova: deciders (caso `IgnoreDuplicate`); manual `position-duplicate` (valor final correto); E2E `position-duplicate` e duplicatas no `volume`.
+- Prova: deciders (caso `IgnoreDuplicate`); manual `position-duplicate` (valor final correto); E2E `position-duplicate`, duplicatas no `volume` e duplicatas no cenário `stream`.
 
 ## 5. Delete e tombstone
 
@@ -71,13 +72,22 @@ Em "duplicado", o que se afirma é o **valor final do cache**, não uma linha de
 
 ## 7. Restart do worker no meio do stream
 
-- **Given** o worker consumindo com offsets commitados apenas após gravar.
-- **When** o pod é morto enquanto há eventos em trânsito e o Deployment o recria.
-- **Then** nada se perde (retoma do último offset commitado) e eventos reentregues não corrompem a view (idempotência pela regra de versão).
-- Prova: `ConsumerLoopTests` (commit só após o handler; `Seek` em exceção); manual (worker parado, escrita, subida: só eventos novos); E2E `restart-worker` entre `seed-a` e `seed-b`.
-- Limite: o e2e prova o **resultado final** correto depois do restart. Não prova que houve reentrega, porque isso depende do timing.
+- **Given** o worker consumindo com offsets commitados apenas após gravar no Valkey.
+- **When** o pod é removido enquanto o Job `seed-stream` está escrevendo e o Deployment recria o worker.
+- **Then** nada se perde, o stream retoma dos offsets apropriados e eventos reentregues não corrompem a view.
+- Prova: `ConsumerLoopTests` (commit só após o handler; `Seek` em exceção); manual (worker parado, escrita, subida: só eventos novos); E2E `seed-stream-restart` após o primeiro log `progresso`, entre `seed-a` e `seed-b`, com `assert-view` validando o estado final.
+- Limite: o E2E prova o **resultado final** correto depois do restart, mas não garante que houve reentrega; isso depende do timing.
 
-## 8. Replay do offset 0 reconstrói cache idêntico
+## 8. Snapshot CDC e streaming subsequente
+
+- **Given** um conector novo, sem dados existentes nos tópicos.
+- **When** `snapshot-pre` cria veículos e posições antes do registro do Debezium e `snapshot-post` altera essas mesmas linhas depois do início do streaming.
+- **Then** `snapshot-only` é projetado pelos eventos `op=r`; `snapshot-then-stream` combina snapshot com updates/inserts posteriores e converge para `ACTIVE` com lat/lng `-9.41/-35.41`.
+- Prova unitária: parser/decider, regra comum para snapshot e streaming, convergência por permutação e testes de replay.
+- E2E: o fluxo `snapshot` confirma eventos `op=r` nos dois tópicos antes de executar `snapshot-post`; em cluster reutilizado, avisa que o snapshot inicial não será repetido e continua pelo streaming.
+- Limite: a prova completa do snapshot depende de cluster novo, pois um conector já existente não dispara outro snapshot inicial.
+
+## 9. Replay do offset 0 reconstrói cache idêntico
 
 - **Given** o db 0 convergiu para os valores esperados (`assert-view` passou).
 - **When** um worker em modo replay (`Replay__Enabled=true`, `Valkey__Database=1`, grupo novo) lê os tópicos desde o offset 0.
@@ -86,18 +96,33 @@ Em "duplicado", o que se afirma é o **valor final do cache**, não uma linha de
 - O replay processa em ordem diferente da original (por exemplo, posição antes do veículo) e chega ao mesmo resultado, que é a evidência de que a projeção é determinística.
 - Prova: `ViewComparerTests`, `ReplayConfigurationTests` (trava contra db 0); manual com db 1; E2E etapa `replay`.
 
+## Cenários E2E implementados
+
+| Receita | Cenários cobertos | Asserção |
+|---|---|---|
+| `seed-a` | `lifecycle`, `out-of-order`, `delete`, `volume` | Via `assert-view` no db 0 |
+| `seed-b` | `positions`, `position-out-of-order`, `position-duplicate`, `position-before-vehicle`, `position-after-delete` | Via `assert-view` no db 0 |
+| `snapshot` | `snapshot-only`, `snapshot-then-stream-pre/post` | Evento `op=r` confirmado e `assert-view` |
+| `seed-stream-restart` | Stream de 3 veículos por padrão, com fora de ordem e duplicatas | `assert-view` valida estado e posição dos veículos |
+| `replay` | Reconstrução completa no db 1 | `verify-replay` compara db 0 e db 1 duas vezes consecutivas |
+
+O `assert-view` verifica estado, latitude e longitude dos cenários individuais e dos veículos do stream. Neste momento, ele não verifica `stateTs`, `stateLsn`, `posTs` ou `posLsn`.
+
 ## Comportamentos extras cobertos
 
 | Comportamento | Prova |
 |---|---|
-| Mensagem inválida (poison) não trava a partição | parsers com mensagens reais; log, skip, commit |
-| Escrita concorrente entre leitura e `EXEC` aborta e repete | unit com mock; **integração cortada** |
+| Mensagem inválida (poison) não trava a partição | parsers com mensagens reais; log, skip e commit |
+| Escrita concorrente entre leitura e `EXEC` aborta e repete | unit com mock; integração cortada |
 | Retries esgotados não commitam o offset | unit (`OptimisticWriteExhaustedException`) |
 | Replay recusa subir com db 0 | `ReplayConfigurationTests` |
+| Entrada fora da faixa ou campo CDC inválido é rejeitada | testes dos parsers |
 
 ## Lacunas conhecidas
 
-- Nenhum E2E rodou no cluster ainda. Antes da entrega: `just up`, `just e2e` e `just up` duas vezes.
-- O `assert-view` não confere `posTs`/`stateTs`.
-- Sabotagem pendente: trocar um valor esperado no `AssertViewCommand` e confirmar que `just assert` falha (prova que o assert pega erro). O mesmo vale para inverter `>` num decider e verificar que algum teste quebra.
+- Nenhum fluxo `just e2e` completo foi validado ponta a ponta no cluster.
+- O `assert-view` não confere `posTs`/`stateTs` nem os campos LSN.
+- Sabotagem pendente: trocar um valor esperado no `AssertViewCommand` e confirmar que `just assert` falha; também inverter uma comparação do decider e confirmar que a suíte unitária falha.
 - Integração com Valkey/Kafka reais não existe; a atomicidade da transação otimista só é verificada contra mock.
+- A etapa de restart não prova determinísticamente que houve reentrega; ela prova apenas a convergência do estado final.
+- Em posições, timestamp e LSN iguais no snapshot são tratados como duplicata; o `id` da linha ainda não foi usado como terceiro desempate.
