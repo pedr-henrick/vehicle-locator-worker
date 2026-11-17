@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: connect
+  namespace: fleet
+spec:
+  selector: { app: connect }
+  ports:
+    - { name: rest, port: 8083, targetPort: 8083 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connect
+  namespace: fleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: connect }
+  template:
+    metadata:
+      labels: { app: connect }
+    spec:
+      containers:
+        - name: connect
+          image: quay.io/debezium/connect:3.0   # confirme a tag
+          ports:
+            - containerPort: 8083
+          env:
+            - { name: BOOTSTRAP_SERVERS, value: "kafka-0.kafka.fleet.svc.cluster.local:9092" }
+            - { name: GROUP_ID, value: "connect-cluster" }
+            - { name: CONFIG_STORAGE_TOPIC, value: "connect_configs" }
+            - { name: OFFSET_STORAGE_TOPIC, value: "connect_offsets" }
+            - { name: STATUS_STORAGE_TOPIC, value: "connect_statuses" }
+            - { name: CONFIG_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: OFFSET_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: STATUS_STORAGE_REPLICATION_FACTOR, value: "1" }
+            - { name: KEY_CONVERTER, value: "org.apache.kafka.connect.json.JsonConverter" }
+            - { name: VALUE_CONVERTER, value: "org.apache.kafka.connect.json.JsonConverter" }
+            - { name: CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE, value: "false" }
+            - { name: CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE, value: "false" }
+          readinessProbe:
+            httpGet: { path: /, port: 8083 }
+            initialDelaySeconds: 20
+            periodSeconds: 5

@@ -1,0 +1,29 @@
+version: v2beta1
+name: vehicle-location-worker
+
+deployments:
+  postgres:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/postgres.yaml
+  kafka:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/kafka.yaml
+  valkey:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/valkey.yaml
+  connect:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/connect.yaml
+  worker:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/worker.yaml

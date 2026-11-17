@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-replay
+  namespace: fleet
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: worker-replay }
+  template:
+    metadata:
+      labels: { app: worker-replay }
+    spec:
+      containers:
+        - name: worker
+          image: vehicle-locator-worker:e2e
+          imagePullPolicy: IfNotPresent
+          workingDir: /app/worker
+          command: ["dotnet", "/app/worker/VehicleLocator.Worker.dll"]
+          env:
+            - { name: Kafka__BootstrapServers, value: "kafka-0.kafka.fleet.svc.cluster.local:9092" }
+            - { name: Valkey__ConnectionString, value: "valkey.fleet.svc.cluster.local:6379" }
+            - { name: Valkey__Database, value: "1" }
+            - { name: Replay__Enabled, value: "true" }
