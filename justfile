@@ -111,9 +111,9 @@ snapshot:
           --bootstrap-server localhost:9092 --topic fleet.public.positions \
           --from-beginning --timeout-ms 1500  --property print.key=true 2>/dev/null || true)
         if grep -F '{{run_id}}-snapshot-only-1' <<< "$vehicles" \
-        | grep -Eq '"op"[[:space:]]*"[[:space:]]*"r"' \
+        | grep -Eq '"op"[[:space:]]*:[[:space:]]*"r"' \
         && grep -F '{{run_id}}-snapshot-only-1' <<< "$positions" \
-        | grep -Eq '"op"[[:space:]]*"[[:space:]]*"r"'; then
+        | grep -Eq '"op"[[:space:]]*:[[:space:]]*"r"'; then
           snapshot_found=true
           break
         fi
@@ -145,7 +145,7 @@ seed-stream-restart:
       if grep -q '^progresso:' <<< "$logs"; then
          echo "Primeiro progresso do stream observado; reiniciando o worker."
          $K delete pod -l app=worker --wait=false
-         "$JUST" mock-job-wait seed-stream
+         "$JUST" mock-job-await seed-stream
          exit 0
       fi
       failed=$($K get job seed-stream -o jsonpath='{.status.failed}')
@@ -154,8 +154,8 @@ seed-stream-restart:
         echo "Job seed-stream FALHOU antes do primeiro progresso"
         exit 1
       fi
-      suceeded=$($K get job seed-stream -o jsonpath='{.status.succeeded}')
-      if [ "${suceeded:-0}" -ge 1 ]; then
+      succeeded=$($K get job seed-stream -o jsonpath='{.status.succeeded}')
+      if [ "${succeeded:-0}" -ge 1 ]; then
         $K logs job/seed-stream || true
         echo "Job seed-stream terminou antes do primeiro progresso"
         exit 1
@@ -188,7 +188,7 @@ mock-job name *args:
     set -euo pipefail
     JUST="{{just_executable()}}"
     "$JUST" mock-job-start {{name}} {{args}}
-    "$JUST" mock-job-wait {{name}}
+    "$JUST" mock-job-await {{name}}
 
 # Cria um job sem esperar sua conclução
 mock-job-start name *args:
