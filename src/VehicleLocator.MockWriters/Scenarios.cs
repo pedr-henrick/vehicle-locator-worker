@@ -13,17 +13,33 @@ public static class Scenarios
         "position-before-vehicle", "position-after-delete"
     ];
 
-    public static string[] All => [.. GroupA, .. GroupB];
+    // Executados ANTES de o connector existir: viram eventos op=r no snapshot do Debezium.
+    public static readonly string[] SnapshotPre = ["snapshot-only", "snapshot-then-stream-pre"];
+
+    // Executados DEPOIS do snapshot: streaming sobre linhas que vieram do snapshot.
+    public static readonly string[] SnapshotPost = ["snapshot-then-stream-post"];
+
+    public static string[] All => [.. SnapshotPre, .. GroupA, .. GroupB, .. SnapshotPost];
+
+    // Cenários verificados pelo assert-view (nomes-base; pre/post compartilham o id).
+    public static string[] Checked => [.. GroupA, .. GroupB, "snapshot-only", "snapshot-then-stream"];
 
     public static string[]? ForGroup(string group) => group switch
     {
         "a" => GroupA,
         "b" => GroupB,
+        "snapshot-pre" => SnapshotPre,
+        "snapshot-post" => SnapshotPost,
         "all" => All,
         _ => null
     };
 
-    public static string IdFor(string prefix, string scenario) => $"{prefix}-{scenario}-1";
+    public static string BaseName(string scenario) =>
+        scenario.EndsWith("-pre", StringComparison.Ordinal) ? scenario[..^4] :
+        scenario.EndsWith("-post", StringComparison.Ordinal) ? scenario[..^5] :
+        scenario;
+
+    public static string IdFor(string prefix, string scenario) => $"{prefix}-{BaseName(scenario)}-1";
 
     public static double VolumeLat(int i) => Math.Round(-9.0 - i * 0.001, 3);
 

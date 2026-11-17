@@ -5,6 +5,7 @@ namespace VehicleLocator.MockWriters;
 
 // Compara a view do Valkey com os valores esperados de cada cenário.
 // Faz polling até convergir ou estourar o timeout.
+// O cenário "stream" é conferido com StreamOptions.Default (o e2e só altera a taxa).
 // Códigos de saída: 0 = OK, 1 = divergência.
 public static class AssertViewCommand
 {
@@ -24,6 +25,7 @@ public static class AssertViewCommand
         await using var mux = await ConnectionMultiplexer.ConnectAsync(options);
         var redis = mux.GetDatabase();
 
+        var total = Scenarios.Checked.Length + StreamOptions.Default.Vehicles;
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         List<string> failures;
         while (true)
@@ -31,7 +33,7 @@ public static class AssertViewCommand
             failures = await CheckAllAsync(redis, prefix);
             if (failures.Count == 0)
             {
-                Console.WriteLine($"OK ({Scenarios.All.Length} cenários, prefixo '{prefix}', db {database})");
+                Console.WriteLine($"OK ({total} veículos verificados, prefixo '{prefix}', db {database})");
                 return 0;
             }
 
@@ -52,7 +54,7 @@ public static class AssertViewCommand
         var failures = new List<string>();
         var last = Scenarios.VolumeCount - 1;
 
-        foreach (var scenario in Scenarios.All)
+        foreach (var scenario in Scenarios.Checked)
         {
             var id = Scenarios.IdFor(prefix, scenario);
             switch (scenario)
@@ -81,10 +83,25 @@ public static class AssertViewCommand
                 case "position-before-vehicle":
                     await ExpectPresent(failures, db, scenario, id, "REGISTERED", -9.60, -35.70);
                     break;
+                case "snapshot-only":
+                    await ExpectPresent(failures, db, scenario, id, "REGISTERED", -9.30, -35.30);
+                    break;
+                case "snapshot-then-stream":
+                    await ExpectPresent(failures, db, scenario, id, "ACTIVE", -9.41, -35.41);
+                    break;
                 default:
                     failures.Add($"{scenario}: sem expectativa cadastrada");
                     break;
             }
+        }
+
+        var stream = StreamOptions.Default;
+        for (var n = 1; n <= stream.Vehicles; n++)
+        {
+            await ExpectPresent(failures, db, $"stream-{n}", StreamPlan.VehicleId(prefix, n),
+                StreamPlan.StateAt(stream.Transitions - 1),
+                StreamPlan.LatAt(stream.Positions - 1),
+                StreamPlan.LngAt(stream.Positions - 1));
         }
 
         return failures;

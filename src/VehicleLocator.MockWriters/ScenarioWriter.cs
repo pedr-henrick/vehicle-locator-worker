@@ -7,6 +7,8 @@ public class ScenarioWriter(NpgsqlDataSource ds)
     // Base fixa: o mesmo cenário gera sempre os mesmos timestamps.
     private static readonly DateTimeOffset T0 = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    private const int ProgressEvery = 50;
+
     public async Task RunAsync(string scenario, string id)
     {
         switch (scenario)
@@ -83,9 +85,65 @@ public class ScenarioWriter(NpgsqlDataSource ds)
                 await InsertPosition(id, -9.60, -35.70, T0.AddMinutes(1));
                 break;
 
+            // ---- snapshot (Debezium op=r) ----
+            case "snapshot-only":
+                // Executado antes do connector; nunca mais tocado.
+                // Esperado: state=REGISTERED, lat=-9.30, lng=-35.30 (tudo vindo do snapshot).
+                await InsertVehicle(id, "REGISTERED", T0);
+                await InsertPosition(id, -9.30, -35.30, T0.AddMinutes(1));
+                break;
+
+            case "snapshot-then-stream-pre":
+                // Antes do connector (snapshot).
+                await InsertVehicle(id, "REGISTERED", T0);
+                await InsertPosition(id, -9.40, -35.40, T0.AddMinutes(1));
+                break;
+
+            case "snapshot-then-stream-post":
+                // Depois do snapshot (streaming), sobre as mesmas linhas.
+                // Esperado: state=ACTIVE, lat=-9.41, lng=-35.41.
+                await UpdateVehicle(id, "ACTIVE", T0.AddMinutes(5));
+                await InsertPosition(id, -9.41, -35.41, T0.AddMinutes(6));
+                break;
+
             default:
                 throw new ArgumentException($"Cenário desconhecido: {scenario}", nameof(scenario));
         }
+    }
+
+    // Executa a sequência determinística de StreamPlan, limitada por RatePerSecond (0 = sem limite).
+    // Imprime "progresso: n/total" a cada 50 operações (o e2e usa isso para saber que o stream começou).
+    public async Task RunStreamAsync(string prefix, StreamOptions options, Action<string> log)
+    {
+        var plan = StreamPlan.Build(prefix, options);
+        var delay = options.RatePerSecond > 0
+            ? TimeSpan.FromMilliseconds(1000.0 / options.RatePerSecond)
+            : TimeSpan.Zero;
+
+        for (var n = 0; n < plan.Count; n++)
+        {
+            var op = plan[n];
+            switch (op.Kind)
+            {
+                case StreamOpKind.InsertVehicle:
+                    await InsertVehicle(op.VehicleId, op.State!, op.Timestamp);
+                    break;
+                case StreamOpKind.UpdateVehicle:
+                    await UpdateVehicle(op.VehicleId, op.State!, op.Timestamp);
+                    break;
+                case StreamOpKind.InsertPosition:
+                    await InsertPosition(op.VehicleId, op.Lat, op.Lng, op.Timestamp);
+                    break;
+            }
+
+            if ((n + 1) % ProgressEvery == 0)
+                log($"progresso: {n + 1}/{plan.Count}");
+
+            if (delay > TimeSpan.Zero)
+                await Task.Delay(delay);
+        }
+
+        log($"concluído: {plan.Count} operações");
     }
 
     private Task InsertVehicle(string id, string state, DateTimeOffset ts) =>

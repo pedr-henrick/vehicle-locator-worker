@@ -24,6 +24,7 @@
 
 	<ItemGroup>
 	  <ProjectReference Include="..\..\src\VehicleLocator.Application\VehicleLocator.Application.csproj" />
+	  <ProjectReference Include="..\..\src\VehicleLocator.MockWriters\VehicleLocator.MockWriters.csproj" />
 		<ProjectReference Include="..\..\src\VehicleLocator.Worker\VehicleLocator.Worker.csproj" />
 	</ItemGroup>
 
