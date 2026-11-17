@@ -1,8 +1,9 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-cluster := "fleet"
-ns      := "fleet"
-ctx     := "kind-fleet"
+cluster      := "fleet"
+ns           := "fleet"
+ctx          := "kind-fleet"
+wait_timeout := "600s"
 
 up: cluster namespace configs deploy wait create-topics connector
 
@@ -23,11 +24,13 @@ configs:
 deploy:
     devspace deploy --kube-context {{ctx}} --namespace {{ns}}
 
+# Timeout alto: o cold start baixa várias imagens ao mesmo tempo (Connect ≈ 700 MB).
 wait:
-    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/postgres --timeout=600s
-    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/kafka --timeout=600s
-    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/valkey --timeout=600s
-    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/connect --timeout=600s
+    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/postgres --timeout={{wait_timeout}}
+    kubectl --context {{ctx}} -n {{ns}} rollout status statefulset/kafka --timeout={{wait_timeout}}
+    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/valkey --timeout={{wait_timeout}}
+    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/connect --timeout={{wait_timeout}}
+    kubectl --context {{ctx}} -n {{ns}} rollout status deploy/worker --timeout={{wait_timeout}}
 
 # Tópicos criados antes do connector: 3 partições, retenção infinita, sem compaction
 create-topics:
@@ -63,6 +66,11 @@ forward:
 # Roda um cenário do mock writer. Ex.: just writer out-of-order
 writer scenario="lifecycle" prefix="":
     dotnet run --project src/VehicleLocator.MockWriters -- {{scenario}} {{prefix}}
+
+# Compara db 0 (cache real) com db 1 (replay). Exige `just forward` aberto.
+# Ex.: just verify-replay 60
+verify-replay timeout="60":
+    dotnet run --project src/VehicleLocator.MockWriters -- verify-replay {{timeout}}
 
 # Ex.: just psql "SELECT * FROM vehicles"
 psql query:

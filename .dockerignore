@@ -1,0 +1,9 @@
+**/bin
+**/obj
+.git
+.devenv*
+.direnv
+.devspace
+tests
+*.txt
+.vs/

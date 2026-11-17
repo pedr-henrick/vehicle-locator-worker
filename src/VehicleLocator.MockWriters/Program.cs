@@ -1,4 +1,8 @@
 ﻿using Npgsql;
+using VehicleLocator.MockWriters;
+
+if (args.Length > 0 && args[0] == "verify-replay")
+    return await ReplayVerifyCommand.RunAsync(args[1..]);
 
 var scenario = args.Length > 0 ? args[0] : "lifecycle";
 var prefix = args.Length > 1 ? args[1] : $"mw{DateTime.UtcNow:HHmmss}";
@@ -80,7 +84,8 @@ switch (scenario)
     default:
         Console.WriteLine(
             "Cenários: lifecycle | out-of-order | delete | positions | position-out-of-order | " +
-            "position-duplicate | position-before-vehicle | position-after-delete");
+            "position-duplicate | position-before-vehicle | position-after-delete | " +
+            "verify-replay [timeout] [dbOrigem] [dbReplay]");
         return 1;
 }
 

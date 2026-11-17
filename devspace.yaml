@@ -1,6 +1,12 @@
 version: v2beta1
 name: vehicle-location-worker
 
+images:
+  worker:
+    image: vehicle-locator-worker
+    dockerfile: ./Dockerfile
+    context: ./
+
 deployments:
   postgres:
     namespace: fleet
@@ -22,3 +28,8 @@ deployments:
     kubectl:
       manifests:
         - deploy/k8s/connect.yaml
+  worker:
+    namespace: fleet
+    kubectl:
+      manifests:
+        - deploy/k8s/worker.yaml
