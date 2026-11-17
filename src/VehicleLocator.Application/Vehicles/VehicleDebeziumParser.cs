@@ -26,11 +26,15 @@ public static class VehicleDebeziumParser
                 case "u":
                     {
                         var after = root.GetProperty("after");
+                        var state = RequiredString(after, "state");
+                        if (state is not ("REGISTERED" or "ACTIVE" or "IDLE" or "MAINTENANCE" or "DECOMMISSIONED"))
+                            return Invalid($"unsupported state '{state}'");
+
                         var change = new VehicleChange(
-                            after.GetProperty("id").GetString()!,
+                            RequiredString(after, "id"),
                             VehicleChangeKind.Upsert,
-                            after.GetProperty("state").GetString()!,
-                            DebeziumTime.ToMicros(after.GetProperty("updated_at").GetString()!),
+                            state,
+                            DebeziumTime.ToMicros(RequiredString(after, "updated_at")),
                             lsn);
                         return new VehicleParseResult(ParseKind.Change, change);
                     }
@@ -38,10 +42,10 @@ public static class VehicleDebeziumParser
                     {
                         var before = root.GetProperty("before");
                         var change = new VehicleChange(
-                            before.GetProperty("id").GetString()!,
+                            RequiredString(before, "id"),
                             VehicleChangeKind.Delete,
                             null,
-                            DebeziumTime.ToMicros(before.GetProperty("updated_at").GetString()!),
+                            DebeziumTime.ToMicros(RequiredString(before, "updated_at")),
                             lsn);
                         return new VehicleParseResult(ParseKind.Change, change);
                     }
@@ -54,6 +58,14 @@ public static class VehicleDebeziumParser
         {
             return Invalid(ex.Message);
         }
+    }
+
+    private static string RequiredString(JsonElement element, string propertyName)
+    {
+        var value = element.GetProperty(propertyName).GetString();
+        return string.IsNullOrWhiteSpace(value)
+            ? throw new FormatException($"'{propertyName}' is missing or empty")
+            : value;
     }
 
     private static VehicleParseResult Invalid(string error) =>

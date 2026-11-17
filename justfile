@@ -58,6 +58,14 @@ create-topics:
         --partitions 3 --replication-factor 1 \
         --config retention.ms=-1 --config retention.bytes=-1 \
         --config cleanup.policy=delete; \
+    description=$$(kubectl --context {{ctx}} -n {{ns}} exec kafka-0 -- \
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
+        --describe --topic $t); \
+      echo "$description"; \
+      if ! grep -Eq 'PartitionCount: 3([[:space:]]|$)' <<< "$description"; then \
+        echo "Topic $t must have exactly 3 partitions" >&2; \
+        exit 1; \
+      fi; \
     done
 
 # Registra (ou atualiza) o connector do Debezium. PUT /config é idempotente.

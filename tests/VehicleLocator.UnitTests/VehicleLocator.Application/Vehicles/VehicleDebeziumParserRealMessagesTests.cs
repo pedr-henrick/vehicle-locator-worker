@@ -55,6 +55,14 @@ public class VehicleDebeziumParserRealMessagesTests
     [InlineData("""{"before":null,"after":{"id":"v-1","updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
     [InlineData("""{"before":null,"after":{"id":"v-1","state":"X","updated_at":"ontem"},"source":{"lsn":1},"op":"c"}""")]
     [InlineData("""{"before":null,"after":{"id":"v-1","state":"X","updated_at":"2026-01-01T00:00:00Z"},"op":"c"}""")]
+    [InlineData("""{after:{"id":null,"state":"ACTIVE","updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":" ","state":"ACTIVE","updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":"v-1","state":null,"updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":"v-1","state":"","updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":"v-1","state":"UNKNOWN","updated_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":"v-1","state":"ACTIVE","updated_at":null},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":"v-1","state":"ACTIVE","updated_at":" "},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{before:{"id":"v-1","updated_at":null},"source":{"lsn":1},"op":"d"}""")]
     public void Malformed_events_are_invalid_instead_of_throwing(string value)
     {
         var result = VehicleDebeziumParser.Parse(value);

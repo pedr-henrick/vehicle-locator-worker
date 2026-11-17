@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using StackExchange.Redis;
 using VehicleLocator.Application.Shared;
 using VehicleLocator.Application.Vehicles;
 
@@ -17,8 +16,7 @@ public class ApplyVehicleChangeUseCaseTests
         {"before":{"id":"v-1","state":"ACTIVE","updated_at":"2026-11-15T23:20:49.643391Z"},"after":null,"source":{"snapshot":"false","lsn":26814408},"op":"d"}
         """;
 
-    private readonly VehicleViewWriter _writer =
-        Substitute.For<VehicleViewWriter>(Substitute.For<IConnectionMultiplexer>());
+    private readonly IVehicleViewWriter _writer = Substitute.For<IVehicleViewWriter>();
 
     private ApplyVehicleChangeUseCase NewUseCase() =>
         new(_writer, NullLogger<ApplyVehicleChangeUseCase>.Instance);

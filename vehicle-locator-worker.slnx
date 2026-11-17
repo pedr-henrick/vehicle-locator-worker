@@ -1,22 +1,4 @@
 <Solution>
-  <Folder Name="/deploy/" />
-  <Folder Name="/deploy/connect/">
-    <File Path="deploy/connect/connector.json" />
-  </Folder>
-  <Folder Name="/deploy/k8s/">
-    <File Path="deploy/k8s/connect.yaml" />
-    <File Path="deploy/k8s/kafka.yaml" />
-    <File Path="deploy/k8s/postgres-init.sql" />
-    <File Path="deploy/k8s/postgres.yaml" />
-    <File Path="deploy/k8s/valkey.yaml" />
-    <File Path="deploy/k8s/worker.yaml" />
-  </Folder>
-  <Folder Name="/deploy/k8s/e2e/">
-    <File Path="worker-replay.yaml" />
-  </Folder>
-  <Folder Name="/deploy/kind/">
-    <File Path="deploy/kind/kind-config.yaml" />
-  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".dockerignore" />
     <File Path=".gitignore" />
@@ -28,6 +10,32 @@
     <File Path="Dockerfile" />
     <File Path="global.json" />
     <File Path="justfile" />
+  </Folder>
+  <Folder Name="/Solution Items/deploy/" />
+  <Folder Name="/Solution Items/deploy/connect/">
+    <File Path="deploy/connect/connector.json" />
+  </Folder>
+  <Folder Name="/Solution Items/deploy/k8s/">
+    <File Path="deploy/k8s/connect.yaml" />
+    <File Path="deploy/k8s/kafka.yaml" />
+    <File Path="deploy/k8s/postgres-init.sql" />
+    <File Path="deploy/k8s/postgres.yaml" />
+    <File Path="deploy/k8s/valkey.yaml" />
+    <File Path="deploy/k8s/worker.yaml" />
+  </Folder>
+  <Folder Name="/Solution Items/deploy/k8s/e2e/">
+    <File Path="deploy/k8s/e2e/worker-replay.yaml" />
+  </Folder>
+  <Folder Name="/Solution Items/deploy/kind/">
+    <File Path="deploy/kind/kind-config.yaml" />
+  </Folder>
+  <Folder Name="/Solution Items/docs/">
+    <File Path="docs/c4.md" />
+    <File Path="docs/spec.md" />
+    <File Path="docs/test-behaviors.md" />
+  </Folder>
+  <Folder Name="/Solution Items/docs/adr/">
+    <File Path="docs/adr/0001-cdc-vehicle-cache.md" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/VehicleLocator.Application/VehicleLocator.Application.csproj" />

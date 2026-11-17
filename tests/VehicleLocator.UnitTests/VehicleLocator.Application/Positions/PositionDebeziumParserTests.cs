@@ -83,6 +83,13 @@ public class PositionDebeziumParserTests
     [InlineData("""{"before":null,"after":{"id":1,"vehicle_id":"v","lat":"x","lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
     [InlineData("""{"before":null,"after":{"id":1,"vehicle_id":"v","lat":1,"lng":1,"recorded_at":"ontem"},"source":{"lsn":1},"op":"c"}""")]
     [InlineData("""{"before":null,"after":{"id":1,"vehicle_id":"v","lat":1,"lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":1,"lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":null,"lat":1,"lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":1,"lng":1,"recorded_at":null},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":1,"lng":1,"recorded_at":" "},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":null,"lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":1,"lng":null,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
+    [InlineData("""{after:{"id":1,"vehicle_id":"v","lat":1e9999,"lng":1,"recorded_at":"2026-01-01T00:00:00Z"},"source":{"lsn":1},"op":"c"}""")]
     public void Malformed_events_are_invalid_instead_of_throwing(string value)
     {
         var r = PositionDebeziumParser.Parse(value);

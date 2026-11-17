@@ -3,9 +3,9 @@ using VehicleLocator.Application.Shared;
 
 namespace VehicleLocator.Application.Vehicles;
 
-public class VehicleViewWriter(IConnectionMultiplexer mux)
+public class VehicleViewWriter(IConnectionMultiplexer mux) : IVehicleViewWriter
 {
-    public virtual Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
+    public Task<VehicleDecision> ApplyAsync(VehicleChange change) =>
         OptimisticWrite.RunAsync(() => TryApplyAsync(change));
 
     private async Task<(bool Committed, VehicleDecision Result)> TryApplyAsync(VehicleChange change)

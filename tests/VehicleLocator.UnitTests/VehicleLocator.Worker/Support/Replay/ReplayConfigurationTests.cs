@@ -24,10 +24,24 @@ public class ReplayConfigurationTests
     {
         var kafka = new KafkaOptions();
 
-        ReplayConfiguration.ApplyGroupSuffix(kafka, new ReplayOptions { Enabled = true }, Now);
+        ReplayConfiguration.ApplyGroupSuffix(kafka, new ReplayOptions { Enabled = true }, Now, "run-123");
 
-        Assert.Equal("vehicle-cache-vehicles-replay-20261116120000", kafka.VehiclesGroupId);
-        Assert.Equal("vehicle-cache-positions-replay-20261116120000", kafka.PositionsGroupId);
+        Assert.Equal("vehicle-cache-vehicles-replay-20261116120000-run-123", kafka.VehiclesGroupId);
+        Assert.Equal("vehicle-cache-positions-replay-20261116120000-run-123", kafka.PositionsGroupId);
+    }
+    
+    [Fact]
+    public void Replay_ligado_gera_group_ids_diferentes_em_execucoes_separadas()
+    {
+        var first = new KafkaOptions();
+        var second = new KafkaOptions();
+        var replay = new ReplayOptions { Enabled = true };
+
+        ReplayConfiguration.ApplyGroupSuffix(first, replay, Now);
+        ReplayConfiguration.ApplyGroupSuffix(second, replay, Now);
+
+        Assert.NotEqual(first.VehiclesGroupId, second.VehiclesGroupId);
+        Assert.NotEqual(first.PositionsGroupId, second.PositionsGroupId);
     }
 
     [Fact]

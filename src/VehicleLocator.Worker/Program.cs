@@ -29,12 +29,12 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 builder.Services.AddSingleton<IKafkaConsumerFactory, KafkaConsumerFactory>();
 builder.Services.AddSingleton<IConsumerLoop, ConsumerLoop>();
 
-builder.Services.AddSingleton<VehicleViewWriter>();
+builder.Services.AddSingleton<IVehicleViewWriter, VehicleViewWriter>();
 builder.Services.AddSingleton<ApplyVehicleChangeUseCase>();
-builder.Services.AddSingleton<PositionViewWriter>();
+builder.Services.AddSingleton<IPositionViewWriter, PositionViewWriter>();
 builder.Services.AddSingleton<ApplyPositionChangeUseCase>();
 
 builder.Services.AddHostedService<VehicleConsumer>();
 builder.Services.AddHostedService<PositionConsumer>();
 
-builder.Build().Run();
+await builder.Build().RunAsync();

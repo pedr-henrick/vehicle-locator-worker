@@ -5,13 +5,13 @@ namespace VehicleLocator.Worker.Support.Replay;
 
 public static class ReplayConfiguration
 {
-    public static void ApplyGroupSuffix(KafkaOptions kafka, ReplayOptions replay, DateTimeOffset now)
+    public static void ApplyGroupSuffix(KafkaOptions kafka, ReplayOptions replay, DateTimeOffset now, string runId = null)
     {
         if (!replay.Enabled)
             return;
 
         var suffix = string.IsNullOrWhiteSpace(replay.GroupSuffix)
-            ? now.UtcDateTime.ToString("yyyyMMddHHmmss")
+            ? $"{now.UtcDateTime.ToString("yyyyMMddHHmmss")}-{runId ?? Guid.NewGuid().ToString("N")}"
             : replay.GroupSuffix;
 
         kafka.VehiclesGroupId = $"{kafka.VehiclesGroupId}-replay-{suffix}";

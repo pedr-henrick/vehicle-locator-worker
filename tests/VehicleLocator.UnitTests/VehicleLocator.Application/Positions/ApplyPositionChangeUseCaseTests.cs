@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using StackExchange.Redis;
 using VehicleLocator.Application.Positions;
 using VehicleLocator.Application.Shared;
 
@@ -13,8 +12,7 @@ public class ApplyPositionChangeUseCaseTests
         {"before":null,"after":{"id":1,"vehicle_id":"v-1","lat":-9.66,"lng":-35.73,"recorded_at":"2026-11-15T23:16:09.214383Z"},"source":{"snapshot":"false","lsn":26812760},"op":"c"}
         """;
 
-    private readonly PositionViewWriter _writer =
-        Substitute.For<PositionViewWriter>(Substitute.For<IConnectionMultiplexer>());
+    private readonly IPositionViewWriter _writer = Substitute.For<IPositionViewWriter>();
 
     private ApplyPositionChangeUseCase NewUseCase() =>
         new(_writer, NullLogger<ApplyPositionChangeUseCase>.Instance);

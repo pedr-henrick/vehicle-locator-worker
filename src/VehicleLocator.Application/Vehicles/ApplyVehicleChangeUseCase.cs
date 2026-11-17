@@ -4,7 +4,7 @@ using VehicleLocator.Application.Shared;
 namespace VehicleLocator.Application.Vehicles;
 
 public class ApplyVehicleChangeUseCase(
-    VehicleViewWriter writer,
+    IVehicleViewWriter writer,
     ILogger<ApplyVehicleChangeUseCase> logger)
 {
     public async Task<ProjectionResult> ExecuteAsync(string? key, string? value, CancellationToken ct)
