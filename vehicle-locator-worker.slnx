@@ -11,6 +11,9 @@
     <File Path="deploy/k8s/valkey.yaml" />
     <File Path="deploy/k8s/worker.yaml" />
   </Folder>
+  <Folder Name="/deploy/k8s/e2e/">
+    <File Path="worker-replay.yaml" />
+  </Folder>
   <Folder Name="/deploy/kind/">
     <File Path="deploy/kind/kind-config.yaml" />
   </Folder>

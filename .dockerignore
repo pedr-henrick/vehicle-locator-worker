@@ -4,6 +4,7 @@
 .devenv*
 .direnv
 .devspace
+TestResults
 tests
 *.txt
 .vs/

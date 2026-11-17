@@ -4,8 +4,17 @@ cluster      := "fleet"
 ns           := "fleet"
 ctx          := "kind-fleet"
 wait_timeout := "600s"
+image        := "vehicle-locator-worker:e2e"
+job_timeout  := "300"
 
-up: cluster namespace configs deploy wait create-topics connector
+# Endereços internos do cluster (usados pelos Jobs de mock).
+pg := "Host=postgres.fleet.svc.cluster.local;Port=5432;Username=fleet;Password=fleet;Database=fleet"
+vk := "valkey.fleet.svc.cluster.local:6379"
+
+# Prefixo único por execução do e2e: ids não colidem em reexecuções no mesmo cluster.
+run_id := "e2e" + `date +%d%H%M%S`
+
+up: cluster namespace configs image deploy wait create-topics connector
 
 cluster:
     kind get clusters | grep -qx {{cluster}} \
@@ -20,6 +29,14 @@ configs:
     kubectl --context {{ctx}} -n {{ns}} create configmap postgres-init \
       --from-file=deploy/k8s/postgres-init.sql --dry-run=client -o yaml \
       | kubectl --context {{ctx}} apply -f -
+
+# Constrói a imagem única (worker + mockwriters) e carrega no kind.
+# Plano B se o `kind load docker-image` falhar (containerd image store do Docker Desktop).
+image:
+    docker build -t {{image}} .
+    kind load docker-image {{image}} --name {{cluster}} \
+      || { docker save {{image}} -o /tmp/vehicle-locator-image.tar \
+           && kind load image-archive /tmp/vehicle-locator-image.tar --name {{cluster}}; }
 
 deploy:
     devspace deploy --kube-context {{ctx}} --namespace {{ns}}
@@ -55,6 +72,71 @@ connector:
 down:
     kind delete cluster --name {{cluster}}
 
+# ---------------------------------------------------------------- e2e
+
+# Fluxo completo. Cada etapa é uma recipe; falha em qualquer uma interrompe com código != 0.
+e2e: up seed-a restart-worker seed-b assert replay
+    @echo "E2E OK: view correta (db 0) e replay idêntico (db 1)."
+
+# Grupo A: veículos + volume.
+seed-a: (mock-job "seed-a" "seed" run_id "a")
+
+# Grupo B: posições (inclui posição antes do veículo e depois do delete).
+seed-b: (mock-job "seed-b" "seed" run_id "b")
+
+# Mata o pod do worker logo após o grupo A, sem esperar convergência.
+# O Deployment recria o pod, que retoma dos offsets commitados enquanto o grupo B é escrito.
+restart-worker:
+    kubectl --context {{ctx}} -n {{ns}} delete pod -l app=worker --wait=false
+
+# Só compara com o esperado depois que o db 0 convergiu (polling de até 180s).
+assert: (mock-job "assert-view" "assert-view" run_id "180" "0")
+
+# Replay: limpa o db 1, sobe o worker de replay (offset 0, db 1), compara db 0 x db 1
+# e remove o worker de replay, mesmo em caso de falha.
+replay:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    K="kubectl --context {{ctx}} -n {{ns}}"
+    trap '$K delete -f deploy/k8s/e2e/worker-replay.yaml --ignore-not-found' EXIT
+    $K exec deploy/valkey -- valkey-cli -n 1 FLUSHDB
+    $K apply -f deploy/k8s/e2e/worker-replay.yaml
+    $K rollout status deploy/worker-replay --timeout={{wait_timeout}}
+    {{just_executable()}} mock-job verify-replay verify-replay 120 0 1
+
+# Cria um Job com a imagem única, espera terminar e mostra o log.
+# Ex.: just mock-job seed-a seed e2e01 a
+mock-job name *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    K="kubectl --context {{ctx}} -n {{ns}}"
+    $K delete job {{name}} --ignore-not-found
+    $K create job {{name}} --image={{image}} --dry-run=client -o json \
+      -- dotnet /app/mockwriters/VehicleLocator.MockWriters.dll {{args}} \
+      | jq --arg pg "{{pg}}" --arg vk "{{vk}}" \
+          '.spec.backoffLimit = 0 | .spec.template.spec.containers[0].env = [{name:"POSTGRES",value:$pg},{name:"VALKEY",value:$vk}]' \
+      | $K apply -f -
+    deadline=$((SECONDS + {{job_timeout}}))
+    while true; do
+      ok=$($K get job {{name}} -o jsonpath='{.status.succeeded}')
+      ko=$($K get job {{name}} -o jsonpath='{.status.failed}')
+      if [ "${ok:-0}" -ge 1 ]; then break; fi
+      if [ "${ko:-0}" -ge 1 ]; then
+        $K logs job/{{name}} || true
+        echo "Job {{name}} FALHOU"
+        exit 1
+      fi
+      if [ "$SECONDS" -ge "$deadline" ]; then
+        $K logs job/{{name}} || true
+        echo "Job {{name}}: timeout"
+        exit 1
+      fi
+      sleep 2
+    done
+    $K logs job/{{name}}
+
+# ---------------------------------------------------------------- utilitários (uso local)
+
 # Expõe Kafka (9094), Valkey (6379) e Postgres (5432) em localhost.
 # Deixe rodando em um terminal separado.
 forward:
@@ -63,12 +145,11 @@ forward:
     kubectl --context {{ctx}} -n {{ns}} port-forward pod/postgres-0 5432:5432 & \
     wait
 
-# Roda um cenário do mock writer. Ex.: just writer out-of-order
+# Roda um cenário do mock writer local. Ex.: just writer out-of-order
 writer scenario="lifecycle" prefix="":
     dotnet run --project src/VehicleLocator.MockWriters -- {{scenario}} {{prefix}}
 
-# Compara db 0 (cache real) com db 1 (replay). Exige `just forward` aberto.
-# Ex.: just verify-replay 60
+# Compara db 0 (cache real) com db 1 (replay) a partir da sua máquina. Exige `just forward`.
 verify-replay timeout="60":
     dotnet run --project src/VehicleLocator.MockWriters -- verify-replay {{timeout}}
 
@@ -98,6 +179,3 @@ connector-status:
 # Ex.: just valkey "HGETALL vehicle:v-1"
 valkey cmd:
     kubectl --context {{ctx}} -n {{ns}} exec deploy/valkey -- valkey-cli {{cmd}}
-
-e2e:
-    @echo "e2e ainda não implementado"
